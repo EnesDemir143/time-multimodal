@@ -49,7 +49,7 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 | 1.4 | Stratification doğrulama scripti (χ² + z-test, md rapor) | `scripts/validate_splits.py` → `docs/split_validation_report.md` | ✅ |
 | 1.5 | ~~LMDB cache builder~~ | ~~`src/data/lmdb_builder.py`~~ | ✅ Sprint 0.5'te tamamlandı |
 | 1.6 | LMDB bitwise determinizm testi | `scripts/test_lmdb_determinism.py` → `docs/lmdb_determinism_report.md` | ✅ |
-| 1.7 | **Embedding Cache Sistemi** — RadJEPA (768-dim) ve TabPFN (192-dim) embedding'lerini bir kez çıkar, `.npy` olarak cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz | `src/data/embedding_cache.py` → `data/embeddings/` | ⬜ |
+| 1.7 | **Embedding Cache Sistemi** — RadJEPA (768-dim) ve TabPFN (192-dim) embedding'lerini bir kez çıkar, HDF5'e cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz | `src/data/embedding_cache.py` → `data/embeddings/embeddings.h5` | ✅ |
 
 > [!IMPORTANT]
 > **1.7 neden kritik:** RadJEPA her epoch'ta 768-dim çıkarım yaparsa (özellikle CPU'da) eğitim ~3 saat sürer. Cache'lemeden hızlıca dene-yanıl yapılamaz. **Train/val split (1.3) sonrası, embedding çıkarımı (Sprint 2) öncesi yapılmalı.**
