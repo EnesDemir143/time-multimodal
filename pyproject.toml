@@ -1,7 +1,7 @@
 [project]
 name = "time-multimodal"
 version = "0.1.0"
-description = "Add your description here"
+description = "Multimodal mortality prediction using chest X-ray (RadJEPA) and tabular clinical data (TabPFN v2) embeddings"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
