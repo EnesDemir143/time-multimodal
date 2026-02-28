@@ -45,8 +45,8 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 |---|-------|-------|-------|
 | 1.1 | ~~`config/seed.yaml` oluştur~~ | `src/utils.py` içinde `set_seeds()` | ✅ |
 | 1.2 | ~~`src/utils/seed.py`~~ — deterministik seed fonksiyonu (Python, NumPy, PyTorch CPU/MPS/CUDA, deterministic flags, single-thread) | `src/utils.py` | ✅ |
-| 1.3 | Patient-level StratifiedKFold 5-fold split (mortalite label) | `data/splits/5fold/fold_{0-4}_{train,val}.csv` | ⬜ |
-| 1.4 | Stratification doğrulama scripti | `scripts/validate_splits.py` | ⬜ |
+| 1.3 | Patient-level StratifiedGroupKFold 5-fold split (mortalite label) | `scripts/create_splits_5fold.py` → `data/splits/5fold/fold_{0-4}_{train,val}.csv` | ✅ |
+| 1.4 | Stratification doğrulama scripti (χ² + z-test, md rapor) | `scripts/validate_splits.py` → `docs/split_validation_report.md` | ✅ |
 | 1.5 | ~~LMDB cache builder~~ | ~~`src/data/lmdb_builder.py`~~ | ✅ Sprint 0.5'te tamamlandı |
 | 1.6 | LMDB bitwise determinizm testi | `tests/test_lmdb_determinism.py` | ⬜ |
 | 1.7 | **Embedding Cache Sistemi** — RadJEPA (768-dim) ve TabPFN (192-dim) embedding'lerini bir kez çıkar, `.npy` olarak cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz | `src/data/embedding_cache.py` → `data/embeddings/` | ⬜ |
