@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 # ── Paths ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_CSV = PROJECT_ROOT / "data" / "raw" / "csv" / "patient_01.csv"
 OUT_CSV = PROJECT_ROOT / "data" / "processed" / "tabpfn_features.csv"
 

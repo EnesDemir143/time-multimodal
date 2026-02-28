@@ -14,7 +14,7 @@ import lmdb
 from tqdm import tqdm
 
 # ── Paths ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 IMAGES_DIR = PROJECT_ROOT / "data" / "raw" / "images"
 LMDB_PATH = PROJECT_ROOT / "data" / "processed" / "xray.lmdb"
 

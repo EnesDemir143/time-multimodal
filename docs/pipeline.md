@@ -1,8 +1,8 @@
-# 🏥 Multimodal COVID-19 Tanı Pipeline'ı
+# 🏥 Multimodal Mortalite Tahmini Pipeline'ı
 
-> **Proje**: CDSL Göğüs Röntgeni + Tabular Veri ile Hiyerarşik COVID-19 Sınıflandırma  
-> **Mimari**: Frozen RadJEPA (Görüntü) + Frozen TabPFN v2 (Tabular) → Projection Head → Hierarchical Classifier  
-> **Hedef**: Deterministik, reprodüse edilebilir, klinik güvenilirlikte bir tanı sistemi
+> **Proje**: CDSL Göğüs Röntgeni + Tabular Veri ile **Binary Mortalite Sınıflandırma (Death vs Survived)**  
+> **Mimari**: Frozen RadJEPA (Görüntü) + Frozen TabPFN v2 (Tabular) → Projection Head → Binary Classifier  
+> **Hedef**: Deterministik, reprodüse edilebilir, klinik güvenilirlikte bir mortalite tahmin sistemi
 
 ---
 
@@ -12,7 +12,7 @@
 2. [FAZ 1 — Veri Altyapısı ve Determinizm](#faz-1--veri-altyapısı-ve-determinizm)
 3. [FAZ 2 — Frozen Embedding Çıkarımı](#faz-2--frozen-embedding-çıkarımı)
 4. [FAZ 3 — Boyut İndirgeme ve Fusion Mimarisi](#faz-3--boyut-indirgeme-ve-fusion-mimarisi)
-5. [FAZ 4 — Hiyerarşik Eğitim Protokolü](#faz-4--hiyerarşik-eğitim-protokolü)
+5. [FAZ 4 — Binary Eğitim Protokolü](#faz-4--binary-eğitim-protokolü)
 6. [FAZ 5 — Robustlaştırma ve Augmentasyon](#faz-5--robustlaştırma-ve-augmentasyon)
 7. [FAZ 6 — Kalibrasyon ve Klinik Validasyon](#faz-6--kalibrasyon-ve-klinik-validasyon)
 8. [FAZ 7 — Reprodüksiyon ve Paketleme](#faz-7--reprodüksiyon-ve-paketleme)
@@ -26,24 +26,19 @@
 
 Veri setine dokunmadan önce sınıf dağılımını analiz et.
 
-**Class Histogramı çıkar:**
+**Binary Sınıflandırma (Death vs Survived):**
 
-| Sınıf | ICD Kodu | Min. Beklenen |
-|-------|----------|---------------|
-| Normal | — | ≥300 |
-| COVID-19 | U07.1 | ≥300 |
-| Diğer Pnömoni | J12-J18 | Kontrol et |
+| Sınıf | Label | Kaynak Sütun | Açıklama |
+|-------|-------|-------------|----------|
+| Death | 1 | `destin_discharge == "Death"` | Hastanede ölen hastalar (550) |
+| Survived | 0 | `destin_discharge != "Death"` | Taburcu olan hastalar (3,929) |
 
-**Karar Noktası:**
-
-| Durum | Strateji |
-|-------|----------|
-| Diğer Pnömoni > 300 örnek | Flat 3-class classifier yeterli |
-| Diğer Pnömoni < 300 örnek | **Hierarchical Strategy zorunlu** (pipeline varsayımı) |
+> [!NOTE]
+> **Karar:** Tek aşamalı binary classification: mortalite tahmini. `destin_discharge` sütunundaki "Death" değeri pozitif sınıf olarak kullanılır. Diğer tüm taburculuk durumları (Home, Transfer, Voluntary Discharge, vb.) "Survived" olarak etiketlenir.
 
 **Eksik Veri Analizi:**
-- Hangi hastalarda tabular veri eksik?
-- Hangi hastalarda görüntü eksik?
+- `glu_first_emerg` (%99 NaN) → silindi
+- Temiz veri: 4,479 satır × 17 sütun (`tabpfn_features_clean.csv`)
 - Oranları not et → %20+ eksik varsa **modality dropout** daha kritik hale gelir.
 
 ### 0.2 Donanım ve Ortam Kontrolü
@@ -86,12 +81,11 @@ seeds:
 
 **Adımlar:**
 1. Patient ID'leri unique olarak al
-2. `GroupKFold` benzeri strateji uygula (patient-level split)
+2. `StratifiedKFold` uygula (patient-level, mortalite label'ına göre strateji)
 3. Her fold'da minimum sınıf dağılımını kontrol et:
-   - Normal: min 50 örnek
-   - COVID: min 50 örnek
-   - Diğer: min 50 örnek (varsa)
-4. Split dosyalarını kaydet: `fold_0_train.txt`, `fold_0_val.txt`, vb.
+   - Death: min ~100 örnek (toplam 550'nin %80'i train'de)
+   - Survived: min ~700 örnek
+4. Split dosyalarını kaydet: `fold_0_train.csv`, `fold_0_val.csv`, vb.
 
 > [!CAUTION]
 > Asla kod içinde dinamik split yapma. Kayıtlı split dosyaları **source of truth** olmalıdır.
@@ -206,47 +200,37 @@ Her batch'te rastgele bir değer üret (0-1):
 
 ---
 
-## FAZ 4 — Hiyerarşik Eğitim Protokolü (2-Stage)
+## FAZ 4 — Binary Eğitim Protokolü
 
-### 4.1 Stage 1: Patoloji Tespiti (Binary)
+### 4.1 Tek Aşamalı Binary Training (Death vs Survived)
 
 | Parametre | Değer |
 |-----------|-------|
-| Label | Normal=0, COVID+Diğer=1 |
-| Loss | `BCEWithLogitsLoss` (pos_weight) |
+| Label | Survived=0, Death=1 |
+| Loss | `BCEWithLogitsLoss` (pos_weight ile class dengeleme) |
 | Optimizer | AdamW (weight_decay=1e-4) |
 | LR | 1e-3 |
 | Early stopping | Val loss 10 epoch düşmezse dur |
+| Cross-validation | 5-fold (patient-level StratifiedKFold) |
 
-**Class Weight:** Inverse frequency (ör. Normal=1000, Pnömoni=1500 → weights=[1.5, 1.0]).
-
-**Kontrol:** Stage 1 sonrası val specificity > 0.95 olmalı. Değilse → data leakage olasılığı.
-
-### 4.2 Stage 2: Diferansiyel Teşhis (COVID vs Diğer)
-
-| Parametre | Değer |
-|-----------|-------|
-| Veri | Sadece Stage 1'de Pnömoni etiketli hastalar |
-| Label | COVID=1, Diğer=0 |
-| Class weight | Diğer Pnömoni azsa ağırlığı artır (ör. 4x) |
-
-> [!WARNING]
-> Filtreleme sonrası < 200 örnek kalırsa few-shot teknikleri düşünülmeli.
-
-### 4.3 Inference Logic
-
-```
-Input: Hasta embedding'i (192-dim)
-
-Step 1: Stage1_model → prob_pathology
-  ├── prob_pathology < 0.5 → "Normal"  (confidence = 1 - prob_pathology)
-  └── prob_pathology ≥ 0.5 →
-        Step 2: Stage2_model → prob_covid
-          ├── prob_covid > 0.5 → "COVID"           (conf = prob_covid × prob_pathology)
-          └── prob_covid ≤ 0.5 → "Other Pneumonia" (conf = (1-prob_covid) × prob_pathology)
+**Class Weight:** Inverse frequency hesapla:
+```python
+pos_weight = n_survived / n_death  # ≈ 7.14 (3,929 / 550)
 ```
 
-**Güven Skoru:** İki stage'in olasılıkları çarpılır (chain rule). Stage 1 düşükse Stage 2 güveni de düşer.
+**Kontrol:** Val AUROC > 0.80 ve Sensitivity@Specificity=0.95 takip edilmeli. Mortalite sınıf dengesizliği yüksek (~7:1), Focal Loss alternatif olarak düşünülebilir.
+
+### 4.2 Inference Logic
+
+```
+Input: Hasta embedding'i (192-dim fused)
+
+Model → logit → sigmoid → prob_death
+  ├── prob_death > 0.5 → "Death"      (confidence = prob_death)
+  └── prob_death ≤ 0.5 → "Survived"   (confidence = 1 - prob_death)
+```
+
+**Güven Skoru:** Sigmoid çıktısı direkt confidence olarak kullanılır. Kalibrasyon sonrası Temperature Scaling ile düzeltilir.
 
 ---
 
@@ -287,7 +271,7 @@ augmented_embedding = embedding + noise
 - Her T için ECE (Expected Calibration Error) hesapla
 - En düşük ECE → seçilen T
 
-**Stage 1 ve Stage 2 için ayrı T değerleri** (T1, T2).
+**Tek T değeri** (binary classifier için).
 
 ### 6.2 Uncertainty Thresholding (Reject Option)
 
@@ -302,8 +286,9 @@ augmented_embedding = embedding + noise
 
 | Metrik | Açıklama |
 |--------|----------|
-| **Macro-F1** | Her sınıf için F1 → ortalama (imbalance'a duyarlı) |
-| **Sensitivity@Spec=0.95** | COVID için spec=0.95 sabitken max sensitivity |
+| **AUROC** | Binary classifier için birincil metrik |
+| **F1-Score** | Precision/Recall dengesi |
+| **Sensitivity@Spec=0.95** | Mortalite için spec=0.95 sabitken max sensitivity |
 | **Calibration Curve** | Reliability diagram (predicted conf vs actual acc) |
 | **Modality Ablation** | Sadece tabular / sadece görüntü / ikisi birlikte |
 
@@ -331,8 +316,8 @@ pip freeze > requirements.txt
 | Dosya | İçerik |
 |-------|--------|
 | `fold_assignments.csv` | Hangi hasta hangi fold'da |
-| `temperature_values.json` | Her fold için T1 ve T2 |
-| `strategy_rationale.md` | Hiyerarşik strateji kullanılma nedeni |
+| `temperature_values.json` | Her fold için T değeri |
+| `strategy_rationale.md` | Binary classification seçim nedeni |
 | `reject_report.json` | "Belirsiz" olarak reddedilen örnekler |
 
 ---
@@ -342,7 +327,7 @@ pip freeze > requirements.txt
 | Durum | Tanı | Çözüm |
 |-------|------|-------|
 | Val loss > train loss (sabit) | Overfitting | Dropout → 0.6, PCA (768→64), Mixup aç, epoch 50→20 |
-| Sadece COVID tahmini | Class Imbalance | Stage 2 class weight 1:5, focal loss dene |
+| Sadece Survived tahmini (Death hiç tahmin edilmiyor) | Şiddetli Class Imbalance (~7:1) | `pos_weight≈7.14` ayarla, focal loss dene, oversampling |
 | Modality Collapse | Tabular ignore ediliyor | Modality dropout → p=0.3, tabular projection 64→128 |
 | ECE > 0.2 | Kötü kalibrasyon | Grid search 0.1-5.0, Platt Scaling dene |
 | MPS OOM | Memory yetmezliği | Batch size=1, RadJEPA CPU'da, gradient checkpointing |

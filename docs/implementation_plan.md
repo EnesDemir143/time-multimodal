@@ -1,13 +1,13 @@
-# 📋 Implementation Plan — Multimodal COVID-19 Tanı Pipeline'ı
+# 📋 Implementation Plan — Multimodal Mortalite Tahmini Pipeline'ı
 
-> **Durum:** 🟡 Plan aşaması — Henüz implementasyona başlanmadı  
+> **Durum:** 🟢 Sprint 0 + 0.5 tamamlandı — Sprint 1'e geçiliyor  
 > **Son güncelleme:** 2026-02-28
 
 ---
 
 ## TL;DR
 
-CDSL göğüs röntgeni + tabular verisinden hiyerarşik (Normal → Pnömoni → COVID/Diğer) sınıflandırma. Frozen RadJEPA ve TabPFN v2 embedding'leri çıkarılır, projection head ile fuse edilir, 2-stage classifier ile eğitilir. Tüm süreç deterministik ve reprodüse edilebilir.
+CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death vs Survived)**. Label: `destin_discharge` sütunu (Death=1, Survived=0). Frozen RadJEPA ve TabPFN v2 embedding'leri çıkarılır, projection head ile fuse edilir, tek aşamalı binary classifier ile eğitilir. Tüm süreç deterministik ve reprodüse edilebilir.
 
 ---
 
@@ -18,9 +18,24 @@ CDSL göğüs röntgeni + tabular verisinden hiyerarşik (Normal → Pnömoni �
 | # | Görev | Çıktı | Durum |
 |---|-------|-------|-------|
 | 0.1 | EDA: Sınıf dağılımı, sütun yapıları, eksik veri, cross-table analiz | `notebooks/01_data_exploration.ipynb` | ✅ |
-| 0.2 | Hierarchical vs Flat karar ver | `docs/pipeline.md` güncelle | ⬜ |
-| 0.3 | Eksik veri oranları raporu | `reports/missing_data.csv` | ⬜ |
-| 0.4 | Donanım kontrolü (MPS, disk, RAM) | Terminal çıktısı not edilir | ⬜ |
+| 0.2 | ~~Hierarchical vs Flat karar~~ → **Binary Mortalite (Death vs Survived)** seçildi | `docs/pipeline.md` güncelle | ✅ |
+| 0.3 | Eksik veri oranları raporu — NaN analizi notebook'u ile tamamlandı | `notebooks/02_tabpfn_nan_check.ipynb` | ✅ |
+| 0.4 | Donanım kontrolü | Aşağıda | ✅ |
+
+> **Donanım:** MacBook Pro — Apple M2 Pro · 16 GB RAM · 80 GB boş disk · Python 3.13.9 · **PyTorch 2.10.0** · **MPS ✅** (`mps:0` aktif) · CUDA ❌ · Veri boyutu: 13 GB
+
+---
+
+### Sprint 0.5 — Veri Ön İşleme *(tamamlandı)* ✅
+
+| # | Görev | Çıktı | Durum |
+|---|-------|-------|-------|
+| 0.5.1 | Raw CSV + X-ray kopyalama scripti | `scripts/get_xray.py` | ✅ |
+| 0.5.2 | TabPFN feature extraction — temizleme & özellik mühendisliği | `scripts/extract_tabpfn_features.py` → `data/processed/tabpfn_features.csv` | ✅ |
+| 0.5.3 | X-ray JPEG → LMDB dönüştürme | `scripts/convert_to_mdb.py` → `data/processed/xray.lmdb/` | ✅ |
+| 0.5.4 | NaN analizi & yüksek NaN sütun temizliği (%50+ eşik) | `notebooks/02_tabpfn_nan_check.ipynb` → `data/processed/tabpfn_features_clean.csv` | ✅ |
+
+> **Sonuçlar:** `glu_first_emerg` (%99 NaN) silindi. Temiz CSV: 4,479 satır × 17 sütun.
 
 ---
 
@@ -28,12 +43,16 @@ CDSL göğüs röntgeni + tabular verisinden hiyerarşik (Normal → Pnömoni �
 
 | # | Görev | Çıktı | Durum |
 |---|-------|-------|-------|
-| 1.1 | `config/seed.yaml` oluştur | Config dosyası | ⬜ |
-| 1.2 | `src/utils/seed.py` — deterministik seed fonksiyonu | Python modülü | ⬜ |
-| 1.3 | Patient-level GroupKFold 5-fold split | `data/splits/fold_{0-4}_{train,val}.txt` | ⬜ |
+| 1.1 | ~~`config/seed.yaml` oluştur~~ | `src/utils.py` içinde `set_seeds()` | ✅ |
+| 1.2 | ~~`src/utils/seed.py`~~ — deterministik seed fonksiyonu (Python, NumPy, PyTorch CPU/MPS/CUDA, deterministic flags, single-thread) | `src/utils.py` | ✅ |
+| 1.3 | Patient-level StratifiedKFold 5-fold split (mortalite label) | `data/splits/5fold/fold_{0-4}_{train,val}.csv` | ⬜ |
 | 1.4 | Stratification doğrulama scripti | `scripts/validate_splits.py` | ⬜ |
-| 1.5 | LMDB cache builder | `src/data/lmdb_builder.py` | ⬜ |
+| 1.5 | ~~LMDB cache builder~~ | ~~`src/data/lmdb_builder.py`~~ | ✅ Sprint 0.5'te tamamlandı |
 | 1.6 | LMDB bitwise determinizm testi | `tests/test_lmdb_determinism.py` | ⬜ |
+| 1.7 | **Embedding Cache Sistemi** — RadJEPA (768-dim) ve TabPFN (192-dim) embedding'lerini bir kez çıkar, `.npy` olarak cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz | `src/data/embedding_cache.py` → `data/embeddings/` | ⬜ |
+
+> [!IMPORTANT]
+> **1.7 neden kritik:** RadJEPA her epoch'ta 768-dim çıkarım yaparsa (özellikle CPU'da) eğitim ~3 saat sürer. Cache'lemeden hızlıca dene-yanıl yapılamaz. **Train/val split (1.3) sonrası, embedding çıkarımı (Sprint 2) öncesi yapılmalı.**
 
 ---
 
@@ -41,8 +60,8 @@ CDSL göğüs röntgeni + tabular verisinden hiyerarşik (Normal → Pnömoni �
 
 | # | Görev | Çıktı | Durum |
 |---|-------|-------|-------|
-| 2.1 | `feature_columns.txt` — tabular feature sırası | Config dosyası | ⬜ |
-| 2.2 | TabPFN v2 embedding çıkarımı (192-dim) | `data/embeddings/tabular/*.npy` | ⬜ |
+| 2.1 | `feature_columns.txt` — tabular feature sırası (`tabpfn_features_clean.csv`'den) | Config dosyası | ⬜ |
+| 2.2 | TabPFN v2 embedding çıkarımı (192-dim) — girdi: `tabpfn_features_clean.csv` | `data/embeddings/tabular/*.npy` | ⬜ |
 | 2.3 | RadJEPA embedding çıkarımı (768-dim) + L2 norm | `data/embeddings/radiological/*.npy` | ⬜ |
 | 2.4 | MPS vs CPU determinizm karşılaştırması (3-5 örnek) | Terminal çıktısı | ⬜ |
 | 2.5 | Embedding boyut ve nan/inf kontrolü | `scripts/validate_embeddings.py` | ⬜ |
@@ -57,7 +76,7 @@ CDSL göğüs röntgeni + tabular verisinden hiyerarşik (Normal → Pnömoni �
 | 3.1 | Projection Head (Tabular: 192→64, Vision: 768→128) | `src/models/projection.py` | ⬜ |
 | 3.2 | Modality Dropout implementasyonu | `src/models/modality_dropout.py` | ⬜ |
 | 3.3 | Parametre sayısı doğrulama (~30-40k) | `scripts/count_params.py` | ⬜ |
-| 3.4 | Hierarchical Classifier (Stage 1 + Stage 2) | `src/models/classifier.py` | ⬜ |
+| 3.4 | **Binary Classifier** (Death vs Survived, tek aşama, sigmoid çıkış) | `src/models/classifier.py` | ⬜ |
 
 ---
 
@@ -65,12 +84,11 @@ CDSL göğüs röntgeni + tabular verisinden hiyerarşik (Normal → Pnömoni �
 
 | # | Görev | Çıktı | Durum |
 |---|-------|-------|-------|
-| 4.1 | Training loop — Stage 1 (Binary: Normal vs Pnömoni) | `src/training/stage1.py` | ⬜ |
-| 4.2 | Training loop — Stage 2 (COVID vs Diğer) | `src/training/stage2.py` | ⬜ |
-| 4.3 | Class weight hesaplama utility | `src/utils/class_weights.py` | ⬜ |
-| 4.4 | Early stopping mekanizması | `src/training/early_stopping.py` | ⬜ |
-| 4.5 | 5-fold cross-validation orchestrator | `src/training/cross_val.py` | ⬜ |
-| 4.6 | Stage 1 sonrası val specificity > 0.95 kontrolü | Metrik raporu | ⬜ |
+| 4.1 | Training loop — Binary Mortalite (Death vs Survived, BCEWithLogitsLoss, pos_weight≈7.14) | `src/training/train.py` | ⬜ |
+| 4.2 | Class weight hesaplama utility | `src/utils/class_weights.py` | ⬜ |
+| 4.3 | Early stopping mekanizması | `src/training/early_stopping.py` | ⬜ |
+| 4.4 | 5-fold cross-validation orchestrator | `src/training/cross_val.py` | ⬜ |
+| 4.5 | Val AUROC / Sensitivity @ Specificity > 0.95 kontrolü | Metrik raporu | ⬜ |
 
 ---
 
@@ -150,6 +168,9 @@ time-multimodal/
 │       ├── seed.py
 │       └── class_weights.py
 ├── scripts/
+│   ├── get_xray.py              # ✅ Raw veri kopyalama
+│   ├── extract_tabpfn_features.py # ✅ Feature extraction
+│   ├── convert_to_mdb.py        # ✅ JPEG → LMDB
 │   ├── validate_splits.py
 │   ├── validate_embeddings.py
 │   └── count_params.py
@@ -170,7 +191,7 @@ time-multimodal/
 
 | Risk | Etki | Olasılık | Mitigasyon |
 |------|------|----------|------------|
-| Diğer Pnömoni < 100 örnek | ⚠️ Yüksek | Orta | Hierarchical + ağır class weighting |
+| Sınıf dengesizliği (Death=550 vs Survived=3,929 → ~7:1) | 🔴 Yüksek | Yüksek | pos_weight≈7.14 + Focal Loss + oversampling |
 | MPS non-determinizm | ⚠️ Orta | Yüksek | CPU fallback + deterministik test |
 | TabPFN v2 API değişikliği | ⚠️ Orta | Düşük | Versiyon pinle, embed çıktısını cache'le |
 | RadJEPA bellek taşması | ⚠️ Orta | Orta | Batch size=1, CPU çıkarım |
@@ -181,4 +202,4 @@ time-multimodal/
 ## Sonraki Adım
 
 > [!IMPORTANT]
-> **Implementasyona başlamadan önce FAZ 0 (EDA) tamamlanmalı.** Diğer Pnömoni sınıfının örnek sayısı tüm stratejiyi belirler.
+> **Sprint 0 + 0.5 tamamlandı. Binary Mortalite (Death vs Survived) kararı verildi.** Sırada Sprint 1 (split, determinizm, embedding cache) ve Sprint 2 (embedding çıkarımı) var.
