@@ -49,6 +49,14 @@ class EmbeddingCacheWriter:
             if grp not in self._file:
                 self._file.create_group(grp)
 
+        # Tabular fold alt-gruplarını garanti et
+        tab_grp = self._file["tabular"]
+        n_folds = _cfg.cv.n_folds
+        for k in range(n_folds):
+            fold_key = f"fold_{k}"
+            if fold_key not in tab_grp:
+                tab_grp.create_group(fold_key)
+
         return self
 
     def close(self) -> None:
@@ -111,14 +119,19 @@ class EmbeddingCacheWriter:
         self,
         patient_id: int,
         embedding: np.ndarray,
+        fold: int,
         *,
         force: bool = False,
     ) -> None:
-        """Tabular (TabPFN v2) embedding'i kaydeder.
+        """Tabular (TabPFN v2) embedding'i fold-aware olarak kaydeder.
+
+        Her fold'un validasyon hastası, o fold'un dışındaki verilerle
+        eğitilmiş TabPFN modelinden embedding alır (data leakage önlemi).
 
         Args:
             patient_id: Hasta ID.
             embedding: (192,) float32 numpy array.
+            fold: Hangi fold'un val seti için üretildi (0..n_folds-1).
             force: True ise varolan veriyi üzerine yazar.
         """
         f = self._ensure_open()
@@ -131,8 +144,9 @@ class EmbeddingCacheWriter:
             )
             raise ValueError(msg)
 
+        fold_key = f"fold_{fold}"
+        grp = f["tabular"][fold_key]
         key = f"p{patient_id}"
-        grp = f["tabular"]
 
         if key in grp:
             if not force:
@@ -225,9 +239,13 @@ class EmbeddingCacheDataset(Dataset):
         self._samples: list[tuple[int, str, str]] = []
         # (patient_id, rad_key, tab_key)
 
+        # Fold-aware tabular grup yolu
+        self._tab_fold_group = f"tabular/fold_{fold}"
+
         with h5py.File(self.h5_path, "r") as f:
             rad_keys = set(f["radiological"].keys()) if "radiological" in f else set()
-            tab_keys = set(f["tabular"].keys()) if "tabular" in f else set()
+            tab_grp_path = self._tab_fold_group
+            tab_keys = set(f[tab_grp_path].keys()) if tab_grp_path in f else set()
 
         # Radyolojik key'lerden sample oluştur
         for rk in sorted(rad_keys):
@@ -240,7 +258,7 @@ class EmbeddingCacheDataset(Dataset):
         # Deterministik sıralama
         self._samples.sort(key=lambda x: (x[0], x[1]))
 
-        # Tabular cache (split içindeki)
+        # Tabular cache (fold-spesifik)
         self._tabular_available = tab_keys
 
     # ── HDF5 lazy open (fork-safe for DataLoader workers) ────────────────
@@ -270,9 +288,11 @@ class EmbeddingCacheDataset(Dataset):
         # Radiological embedding
         rad_emb = torch.from_numpy(f["radiological"][rad_key][:].astype(np.float32))
 
-        # Tabular embedding
+        # Tabular embedding (fold-aware)
         if tab_key in self._tabular_available:
-            tab_emb = torch.from_numpy(f["tabular"][tab_key][:].astype(np.float32))
+            tab_emb = torch.from_numpy(
+                f[self._tab_fold_group][tab_key][:].astype(np.float32)
+            )
         else:
             tab_emb = torch.zeros(TABULAR_DIM, dtype=torch.float32)
 
@@ -321,13 +341,29 @@ def is_cached(
     h5_path: Path | str,
     patient_id: int,
     modality: Literal["radiological", "tabular"],
+    *,
+    fold: int | None = None,
 ) -> bool:
-    """Belirtilen hasta embedding'inin cache'te olup olmadığını kontrol eder."""
+    """Belirtilen hasta embedding'inin cache'te olup olmadığını kontrol eder.
+
+    Args:
+        fold: Tabular modality için zorunlu. Radiological'da yoksayılır.
+    """
     h5_path = Path(h5_path)
     if not h5_path.exists():
         return False
 
     with h5py.File(h5_path, "r") as f:
+        if modality == "tabular":
+            if fold is None:
+                msg = "Tabular modality için 'fold' parametresi zorunludur."
+                raise ValueError(msg)
+            grp_path = f"tabular/fold_{fold}"
+            if grp_path not in f:
+                return False
+            return f"p{patient_id}" in f[grp_path]
+
+        # Radiological
         if modality not in f:
             return False
         prefix = f"p{patient_id}"
@@ -335,15 +371,23 @@ def is_cached(
 
 
 def cache_stats(h5_path: Path | str = DEFAULT_H5_PATH) -> dict:
-    """Cache istatistiklerini döndürür."""
+    """Cache istatistiklerini döndürür (fold-aware tabular)."""
     h5_path = Path(h5_path)
     if not h5_path.exists():
         return {"exists": False}
 
     with h5py.File(h5_path, "r") as f:
         n_rad = len(f["radiological"]) if "radiological" in f else 0
-        n_tab = len(f["tabular"]) if "tabular" in f else 0
         attrs = dict(f["metadata"].attrs) if "metadata" in f else {}
+
+        # Fold bazlı tabular sayıları
+        tab_per_fold: dict[str, int] = {}
+        n_tab_total = 0
+        if "tabular" in f:
+            for fold_key in sorted(f["tabular"].keys()):
+                n = len(f["tabular"][fold_key])
+                tab_per_fold[fold_key] = n
+                n_tab_total += n
 
         # Unique patient count from radiological keys
         rad_pids = set()
@@ -356,7 +400,8 @@ def cache_stats(h5_path: Path | str = DEFAULT_H5_PATH) -> dict:
         "exists": True,
         "h5_path": str(h5_path),
         "num_radiological_embeddings": n_rad,
-        "num_tabular_embeddings": n_tab,
+        "num_tabular_embeddings_total": n_tab_total,
+        "tabular_per_fold": tab_per_fold,
         "num_unique_patients_radiological": len(rad_pids),
         "created_at": attrs.get("created_at", "unknown"),
         "radiological_dim": attrs.get("radiological_dim", RADIOLOGICAL_DIM),

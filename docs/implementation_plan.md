@@ -1,6 +1,6 @@
 # 📋 Implementation Plan — Multimodal Mortalite Tahmini Pipeline'ı
 
-> **Durum:** 🟢 Sprint 0 + 0.5 + Sprint 1 (1.1–1.6) tamamlandı — Sprint 1.7 (Embedding Cache) devam ediyor
+> **Durum:** 🟢 Sprint 0 + 0.5 + Sprint 1 + Sprint 2.1 tamamlandı — Sprint 2.2+ (Embedding Çıkarımı) devam ediyor
 > **Son güncelleme:** 2026-02-28
 
 ---
@@ -39,33 +39,30 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 
 ---
 
-### Sprint 1 — Veri Altyapısı *(~2-3 gün)* ✅ (1.1–1.6 tamamlandı)
+### Sprint 1 — Veri Altyapısı *(~2-3 gün)* ✅
 
 | #   | Görev                                                                                                                                | Çıktı                                                                               | Durum                        |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------- |
-| 1.1 | ~~`config/seed.yaml` oluştur~~                                                                                                    | `src/utils.py` içinde `set_seeds()`                                               | ✅                           |
-| 1.2 | ~~`src/utils/seed.py`~~ — deterministik seed fonksiyonu (Python, NumPy, PyTorch CPU/MPS/CUDA, deterministic flags, single-thread) | `src/utils.py`                                                                       | ✅                           |
-| 1.3 | Patient-level StratifiedGroupKFold 5-fold split (mortalite label)                                                                     | `scripts/create_splits_5fold.py` → `data/splits/5fold/fold_{0-4}_{train,val}.csv` | ✅                           |
+| 1.1 | ~~`config/seed.yaml` oluştur~~                                                                                                    | `src/utils/set_seeds.py` içinde `set_seeds()`                                     | ✅                           |
+| 1.2 | Deterministik seed fonksiyonu (Python, NumPy, PyTorch CPU/MPS/CUDA, deterministic flags, single-thread)                              | `src/utils/set_seeds.py`                                                              | ✅                           |
+| 1.3 | Patient-level StratifiedGroupKFold 10-fold split (mortalite label)                                                                     | `scripts/create_splits_5fold.py` → `data/splits/5fold/fold_{0-9}_{train,val}.csv` | ✅                           |
 | 1.4 | Stratification doğrulama scripti (χ² + z-test, md rapor)                                                                           | `scripts/validate_splits.py` → `docs/split_validation_report.md`                  | ✅                           |
 | 1.5 | ~~LMDB cache builder~~                                                                                                               | ~~`src/data/lmdb_builder.py`~~                                                      | ✅ Sprint 0.5'te tamamlandı |
 | 1.6 | LMDB bitwise determinizm testi                                                                                                        | `scripts/test_lmdb_determinism.py` → `docs/lmdb_determinism_report.md`            | ✅                           |
-| s   | FN (192-dim) embedding'lerini bir kez çıkar, HDF5'e cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz                       | `src/data/embedding_cache.py` → `data/embeddings/embeddings.h5`                   | ✅                           |
-
-> [!IMPORTANT]
-> **1.7 neden kritik:** RadJEPA her epoch'ta 768-dim çıkarım yaparsa (özellikle CPU'da) eğitim ~3 saat sürer. Cache'lemeden hızlıca dene-yanıl yapılamaz. **Train/val split (1.3) sonrası, embedding çıkarımı (Sprint 2) öncesi yapılmalı.**
+| 1.7 | Embedding Cache sistemi — HDF5'e fold-aware cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz                                           | `src/data/embedding_cache.py` → `data/embeddings/embeddings.h5`                   | ✅                           |
 
 ---
 
-### Sprint 2 — Embedding Çıkarımı *(~2-3 gün)*
+### Sprint 2 — Config & Embedding Çıkarımı *(~2-3 gün)*
 
-| #   | Görev                                                                                  | Çıktı                               | Durum |
-| --- | --------------------------------------------------------------------------------------- | -------------------------------------- | ----- |
-| 2.1 | `feature_columns.txt` — tabular feature sırası (`tabpfn_features_clean.csv`'den) | Config dosyası                        | ⬜    |
-| 2.2 | TabPFN v2 embedding çıkarımı (192-dim) — girdi:`tabpfn_features_clean.csv`       | `data/embeddings/tabular/*.npy`      | ⬜    |
-| 2.3 | RadJEPA embedding çıkarımı (768-dim) + L2 norm                                      | `data/embeddings/radiological/*.npy` | ⬜    |
-| 2.4 | MPS vs CPU determinizm karşılaştırması (3-5 örnek)                                | Terminal çıktısı                   | ⬜    |
-| 2.5 | Embedding boyut ve nan/inf kontrolü                                                    | `scripts/validate_embeddings.py`     | ⬜    |
-| 2.6 | Hasta bazlı metadata.json oluşturma                                                   | `data/embeddings/*/metadata.json`    | ⬜    |
+| #   | Görev                                                                                        | Çıktı                                                     | Durum |
+| --- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----- |
+| 2.1 | Merkezi YAML config sistemi — seed, path, column, dim tüm dosyalarda config'den okunur | `config/config.yaml` + `src/config.py`                     | ✅    |
+| 2.2 | TabPFN v2 embedding çıkarımı (192-dim) — **Hybrid Per-Fold Cache** (data leakage önlemi: her fold için ayrı TabPFN fit) | `data/embeddings/embeddings.h5` (`tabular/fold_{k}/`)            | ✅    |
+| 2.3 | RadJEPA embedding çıkarımı (768-dim) + L2 norm                                            | `data/embeddings/embeddings.h5` (radiological grubu)       | ✅    |
+| 2.4 | MPS vs CPU determinizm karşılaştırması (5 örnek)                                      | `docs/mps_determinism_report.md`                           | ✅    |
+| 2.5 | Embedding boyut ve nan/inf kontrolü                                                          | `docs/embedding_validation_report.md`                      | ✅    |
+| 2.6 | Hasta bazlı metadata kaydetme (1,616 hasta, label, xray sayıları)                           | `data/embeddings/embeddings.h5` (metadata grubu)           | ✅    |
 
 ---
 
@@ -129,36 +126,43 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 
 ```
 time-multimodal/
-├── notebooks/                 # EDA ve analiz notebookları
+├── config/
+│   └── config.yaml              # ✅ Merkezi konfigürasyon (Sprint 2.1)
+├── notebooks/                   # EDA ve analiz notebookları
 │   ├── 01_data_exploration.ipynb   # ✅
 │   └── 02_tabpfn_nan_check.ipynb   # ✅
 ├── data/
-│   ├── raw/                    # Orijinal CSV + X-ray (dokunma)
-│   │   └── images/             # 4,608 JPEG
+│   ├── raw/                     # Orijinal CSV + X-ray (dokunma)
+│   │   └── images/              # 4,608 JPEG
 │   ├── processed/
 │   │   ├── tabpfn_features.csv       # ✅
 │   │   ├── tabpfn_features_clean.csv # ✅ (4,479 × 17)
 │   │   └── xray.lmdb/               # ✅ (~6.5 GB)
 │   ├── splits/
-│   │   └── 5fold/              # ✅ fold_{0-4}_{train,val}.csv
-│   └── embeddings/             # ⬜ Sprint 2'de doldurulacak
-│       ├── tabular/
-│       └── radiological/
+│   │   └── 5fold/               # ✅ fold_{0-9}_{train,val}.csv (10-fold)
+│   └── embeddings/              # ⬜ Sprint 2.2+'da doldurulacak
+│       └── embeddings.h5        # HDF5:
+│                                #   radiological/p{pid}_{idx} (fold-agnostic)
+│                                #   tabular/fold_{k}/p{pid}  (per-fold)
+│                                #   metadata/
 ├── docs/
 │   ├── pipeline.md                   # ✅
 │   ├── implementation_plan.md        # ✅ Bu dosya
 │   ├── split_validation_report.md    # ✅
-│   └── lmdb_determinism_report.md    # ✅
+│   ├── lmdb_determinism_report.md    # ✅
+│   ├── embedding_validation_report.md # ✅ Sprint 2.5
+│   └── mps_determinism_report.md     # ✅ Sprint 2.4
 ├── src/
 │   ├── __init__.py
+│   ├── config.py                # ✅ YAML config reader (Sprint 2.1)
 │   ├── utils/
 │   │   ├── __init__.py          # re-exports set_seeds
-│   │   └── set_seeds.py         # ✅ set_seeds()
+│   │   └── set_seeds.py         # ✅ set_seeds() — seed config'den
 │   ├── data/
-│   │   ├── embedding_cache.py  # ⬜ Sprint 1.7
-│   │   └── dataset.py          # ⬜ Sprint 2+
+│   │   ├── embedding_cache.py   # ✅ HDF5 fold-aware writer/reader (Sprint 1.7 + Per-Fold)
+│   │   └── dataset.py           # ✅ LMDB + tabular dataset
 │   ├── models/
-│   │   ├── projection.py       # ⬜ Sprint 3
+│   │   ├── projection.py        # ⬜ Sprint 3
 │   │   ├── modality_dropout.py
 │   │   └── classifier.py
 │   ├── training/
@@ -177,9 +181,10 @@ time-multimodal/
 │   ├── get_xray.py              # ✅ Raw veri kopyalama
 │   ├── extract_tabpfn_features.py # ✅ Feature extraction
 │   ├── convert_to_mdb.py        # ✅ JPEG → LMDB
-│   ├── create_splits_5fold.py   # ✅ 5-fold split oluşturma
+│   ├── create_splits_5fold.py   # ✅ 10-fold split oluşturma
 │   ├── validate_splits.py       # ✅ Split doğrulama
 │   ├── test_lmdb_determinism.py # ✅ LMDB determinizm testi
+│   ├── test_embedding_cache.py  # ✅ Embedding cache testi
 │   ├── validate_embeddings.py   # ⬜ Sprint 2
 │   └── count_params.py          # ⬜ Sprint 3
 ├── reports/
@@ -207,6 +212,6 @@ time-multimodal/
 ## Sonraki Adımlar
 
 > [!IMPORTANT]
-> **Sprint 0, 0.5 ve Sprint 1 (1.1–1.6) tamamlandı.** Split validation ve LMDB determinism raporları `docs/` altında mevcut.
+> **Sprint 0, 0.5, Sprint 1 ve Sprint 2 tamamlandı.** Tüm embedding'ler `data/embeddings/embeddings.h5`'e cache'lendi.
 >
-> **Sıradaki görev:** Sprint 1.7 — Embedding Cache Sistemi (`src/data/embedding_cache.py`). Ardından Sprint 2 — Frozen Embedding Çıkarımı (TabPFN v2 + RadJEPA).
+> **Sıradaki görev:** Sprint 3 — Model Mimarisi (Projection Head + Modality Dropout + Binary Classifier).

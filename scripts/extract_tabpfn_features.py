@@ -1,11 +1,19 @@
 """
-TabPFN için özellik çıkarımı — patient_01.csv → tabpfn_features.csv
+TabPFN için özellik çıkarımı + multimodal filtreleme.
+
+Pipeline:
+    patient_01.csv → clean → feature eng → drop high-NaN cols
+    → LMDB intersection (sadece X-ray'li hastalar) → tabpfn_features_clean.csv
 
 Kullanım:
-    uv run python data/scrpit/extract_tabpfn_features.py
+    uv run python scripts/extract_tabpfn_features.py
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import lmdb
 import numpy as np
 import pandas as pd
 
@@ -15,7 +23,12 @@ from src.config import get_config
 _cfg = get_config()
 
 RAW_CSV = _cfg.paths.raw_csv
-OUT_CSV = _cfg.paths.tabpfn_features
+OUT_RAW = _cfg.paths.tabpfn_features          # ara çıktı (tüm hastalar)
+OUT_CLEAN = _cfg.paths.tabpfn_features_clean  # nihai çıktı (multimodal)
+LMDB_PATH = _cfg.paths.xray_lmdb
+
+# NaN oranı bu eşiğin üzerindeki kolonlar düşürülür
+NAN_THRESHOLD = 0.50
 
 # ── Kullanılacak ham kolonlar (config'den) ───────────────────────────────
 RAW_COLS = [_cfg.columns.patient_id] + list(_cfg.columns.raw_features)
@@ -57,6 +70,20 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def drop_high_nan_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """NaN oranı %50'nin üzerindeki kolonları düşür."""
+    nan_ratios = df.drop(columns=["patient_id"]).isna().mean()
+    drop_cols = nan_ratios[nan_ratios > NAN_THRESHOLD].index.tolist()
+
+    if drop_cols:
+        print(f"  🗑️  >{NAN_THRESHOLD:.0%} NaN — düşürülen kolonlar: {drop_cols}")
+        df = df.drop(columns=drop_cols)
+    else:
+        print(f"  ✅ >{NAN_THRESHOLD:.0%} NaN kolon yok")
+
+    return df
+
+
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """Hesaplanmış özellikleri ekle."""
 
@@ -75,9 +102,34 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_lmdb_patient_ids(lmdb_path: Path) -> set[int]:
+    """LMDB'deki tüm unique patient ID'lerini döndür."""
+    env = lmdb.open(str(lmdb_path), readonly=True, lock=False, subdir=True)
+    with env.begin() as txn:
+        all_keys: list[str] = json.loads(txn.get(b"__keys__").decode())
+    env.close()
+
+    patient_ids: set[int] = set()
+    for key in all_keys:
+        # key format: pXXXXXXXX/sXXXXXXXX/XXXXXXXX_XXXX
+        pid_str = key.split("/")[0]  # "p10030053"
+        patient_ids.add(int(pid_str.lstrip("p")))
+
+    return patient_ids
+
+
+def filter_multimodal(df: pd.DataFrame, lmdb_patients: set[int]) -> pd.DataFrame:
+    """Sadece LMDB'de X-ray görüntüsü olan hastaları tut."""
+    before = len(df)
+    df = df[df["patient_id"].isin(lmdb_patients)].reset_index(drop=True)
+    after = len(df)
+    print(f"  📊 {before:,} → {after:,} hasta  (düşen: {before - after:,})")
+    return df
+
+
 def main() -> None:
     print("=" * 60)
-    print("  TabPFN Feature Extraction")
+    print("  TabPFN Feature Extraction + Multimodal Filter")
     print("=" * 60 + "\n")
 
     # 1) Yükle
@@ -91,17 +143,34 @@ def main() -> None:
     print(f"   age NaN sayısı : {df['age'].isna().sum()}")
     print(f"   sex NaN sayısı : {df['sex'].isna().sum()}\n")
 
-    # 3) Özellik mühendisliği
+    # 3) High-NaN kolonları düşür
+    print("🗑️  Yüksek NaN kolonlar kontrol ediliyor...")
+    df = drop_high_nan_columns(df)
+    print()
+
+    # 4) Özellik mühendisliği
     print("⚙️  Hesaplanmış özellikler ekleniyor...")
     df = engineer_features(df)
 
-    # 4) Kaydet
-    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(OUT_CSV, index=False)
-    print(f"\n✅ Kaydedildi → {OUT_CSV}")
+    # 5) Ara çıktı kaydet (tüm hastalar)
+    OUT_RAW.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(OUT_RAW, index=False)
+    print(f"\n📄 Ara çıktı (tüm hastalar) → {OUT_RAW.name}")
+    print(f"   Satır: {len(df):,}  |  Kolon: {df.shape[1]}\n")
+
+    # 6) Multimodal filtre — sadece X-ray'li hastalar
+    print("🩻 Multimodal filtre uygulanıyor (LMDB intersection)...")
+    lmdb_patients = get_lmdb_patient_ids(LMDB_PATH)
+    print(f"  🩻 LMDB'de {len(lmdb_patients):,} unique hasta")
+    df = filter_multimodal(df, lmdb_patients)
+
+    # 7) Nihai çıktı kaydet
+    OUT_CLEAN.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(OUT_CLEAN, index=False)
+    print(f"\n✅ Kaydedildi → {OUT_CLEAN.name}")
     print(f"   Satır: {len(df):,}  |  Kolon: {df.shape[1]}")
 
-    # 5) Özet istatistikler
+    # 8) Özet istatistikler
     print("\n📊 Özet İstatistikler:")
     print(df.describe().round(2).to_string())
 

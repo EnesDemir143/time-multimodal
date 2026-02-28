@@ -9,7 +9,7 @@ seed: 42
 
 # ── Cross-Validation ────────────────────────────────────────────────────
 cv:
-  n_folds: 5
+  n_folds: 10
 
 # ── Paths (proje köküne göre relative) ──────────────────────────────────
 paths:

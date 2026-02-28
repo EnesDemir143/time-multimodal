@@ -2,6 +2,7 @@
 
 Her örnek = (image_tensor, tabular_tensor, label) üçlüsüdür.
 Bir hastanın birden fazla X-ray görüntüsü varsa, her biri ayrı örnek olur.
+Tüm hastalar hem tabular hem görüntü verisine sahiptir (multimodal filtre uygulanmıştır).
 
 Kullanım:
     from src.data.dataset import MortalityDataset
@@ -137,9 +138,7 @@ class MortalityDataset(Dataset):
         # Deterministik sıralama
         self._samples.sort(key=lambda x: (x[0], x[1]))
 
-        # ── 4) İstatistikler ────────────────────────────────────────────
-        patients_with_images = {s[0] for s in self._samples}
-        self._patients_no_image = self._patient_ids - patients_with_images
+
 
     # ── LMDB lazy open (fork-safe for DataLoader workers) ────────────────
 
@@ -228,8 +227,7 @@ class MortalityDataset(Dataset):
             f"MortalityDataset(fold={self.fold}, split='{self.split}', "
             f"samples={len(self)}, "
             f"survived={counts[0]}, death={counts[1]}, "
-            f"features={self.num_features}, "
-            f"patients_no_image={len(self._patients_no_image)})"
+            f"features={self.num_features})"
         )
 
     def __del__(self) -> None:

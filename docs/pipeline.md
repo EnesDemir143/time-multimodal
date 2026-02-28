@@ -58,34 +58,29 @@ Veri setine dokunmadan önce sınıf dağılımını analiz et.
 
 ### 1.1 Deterministik Seed Altyapısı
 
-Tüm kütüphane seed'leri tek bir config dosyasında saklanır:
+Tüm kütüphane seed'leri merkezi config dosyasında saklanır:
 
 ```yaml
-# config/seed.yaml
-seeds:
-  python: 42
-  numpy: 42
-  torch: 42
-  cuda_deterministic: true
-  mps_warn_only: true
+# config/config.yaml
+seed: 42
+cv:
+  n_folds: 10
 ```
 
 **Ek Ayarlar:**
 - `PIL.ImageFile.LOAD_TRUNCATED_IMAGES = False` — truncasyon kaynaklı non-determinizm engellenir
 - `torch.set_num_threads(1)` + `OMP_NUM_THREADS=1` — multi-threading kaynaklı non-determinizm engellenir
 
-### 1.2 Stratified 5-Fold Split
+### 1.2 Stratified 10-Fold Split
 
 > [!IMPORTANT]
 > Aynı hastanın farklı zamanlardaki görüntüleri **aynı fold'da** olmalıdır. Aksi halde data leakage oluşur.
 
 **Adımlar:**
 1. Patient ID'leri unique olarak al
-2. `StratifiedKFold` uygula (patient-level, mortalite label'ına göre strateji)
-3. Her fold'da minimum sınıf dağılımını kontrol et:
-   - Death: min ~100 örnek (toplam 550'nin %80'i train'de)
-   - Survived: min ~700 örnek
-4. Split dosyalarını kaydet: `fold_0_train.csv`, `fold_0_val.csv`, vb.
+2. `StratifiedKFold(n_splits=10)` uygula (patient-level, mortalite label'ına göre strateji)
+3. Her fold'da minimum sınıf dağılımını kontrol et
+4. Split dosyalarını kaydet: `fold_{0-9}_train.csv`, `fold_{0-9}_val.csv`
 
 > [!CAUTION]
 > Asla kod içinde dinamik split yapma. Kayıtlı split dosyaları **source of truth** olmalıdır.
@@ -116,6 +111,18 @@ assert torch.equal(tensor_run1, tensor_run2)  # Bitwise eşitlik şart
 
 ## FAZ 2 — Frozen Embedding Çıkarımı
 
+> [!NOTE]
+> Embedding çıkarımı **train'den ÖNCE** bir kez yapılır ve HDF5'e cache'lenir. Eğitim sırasında tekrar çıkarım yok.
+>
+> **Çalıştırma Sırası:**
+> ```bash
+> # 1) TabPFN (per-fold, ~10 ayrı model fit)
+> PYTHONPATH=. uv run python scripts/extract_tabpfn_embeddings.py
+>
+> # 2) RadJEPA (tüm veri, tek seferlik)
+> PYTHONPATH=. uv run python scripts/extract_radjepa_embeddings.py
+> ```
+
 ### 2.1 TabPFN v2 Entegrasyonu (Tabular → 192-dim)
 
 | Parametre | Değer |
@@ -126,6 +133,17 @@ assert torch.equal(tensor_run1, tensor_run2)  # Bitwise eşitlik şart
 | Checkpoint | Her 100 hastada `.npy`'ye kaydet |
 
 **Kritik:** TabPFN'in `predict` değil `embed` fonksiyonunu kullan.
+
+> [!CAUTION]
+> **Hybrid Per-Fold Cache (Data Leakage Önlemi):**
+> TabPFN, RadJEPA’dan farklı olarak **label bilgisini görerek** embedding üretir.
+> Tüm veriyi tek seferde TabPFN’e verip sonra fold’lara bölmek **data leakage** oluşturur.
+>
+> **Çözüm:** Her fold `k` için ayrı bir TabPFN modeli sadece fold `k`’nın **train** setindeki
+> verilerle eğitilir, sonra fold `k`’nın **val** setindeki hastalara embedding üretir.
+> Böylece hiçbir validasyon hastasının label’ı, kendi embedding’ini üreten modele sızmaz.
+>
+> **HDF5 Yapısı:** `tabular/fold_{k}/p{pid}` (RadJEPA fold-agnostic kalır)
 
 ### 2.2 RadJEPA Entegrasyonu (Görüntü → 768-dim)
 
@@ -148,10 +166,18 @@ embedding = embedding / np.linalg.norm(embedding)  # L2 Normalize
 
 **Cache Yapısı:**
 ```
-/patient_001/
-  ├── tabular_192.npy
-  ├── radiological_768.npy
-  └── metadata.json  # label, fold_idx, missing_flags
+embeddings.h5
+├── radiological/
+│   ├── p10030053_0    # fold-agnostic (RadJEPA label görmez)
+│   └── ...
+├── tabular/
+│   ├── fold_0/
+│   │   ├── p10394712  # Fold 0 val hastası, Fold 0 train ile eğitilmiş model
+│   │   └── ...
+│   ├── fold_1/
+│   │   └── ...
+│   └── fold_{n}/
+└── metadata/
 ```
 
 **Kontrol:** Embedding boyutlarını doğrula (192 ve 768). `nan`/`inf` varsa → batch size=1'e düşür.
@@ -211,7 +237,7 @@ Her batch'te rastgele bir değer üret (0-1):
 | Optimizer | AdamW (weight_decay=1e-4) |
 | LR | 1e-3 |
 | Early stopping | Val loss 10 epoch düşmezse dur |
-| Cross-validation | 5-fold (patient-level StratifiedKFold) |
+| Cross-validation | 10-fold (patient-level StratifiedKFold) |
 
 **Class Weight:** Inverse frequency hesapla:
 ```python

@@ -1,6 +1,6 @@
 # 📊 Split Validation Report
 
-> **Tarih:** 2026-02-28 20:59
+> **Tarih:** 2026-02-28 22:10
 > **Anlamlılık düzeyi (α):** 0.05
 
 ---
@@ -14,16 +14,26 @@
 
 | Dosya | Satır | Durum |
 |-------|-------|-------|
-| `fold_0_train.csv` | 3,583 | ✅ |
-| `fold_0_val.csv` | 896 | ✅ |
-| `fold_1_train.csv` | 3,583 | ✅ |
-| `fold_1_val.csv` | 896 | ✅ |
-| `fold_2_train.csv` | 3,583 | ✅ |
-| `fold_2_val.csv` | 896 | ✅ |
-| `fold_3_train.csv` | 3,584 | ✅ |
-| `fold_3_val.csv` | 895 | ✅ |
-| `fold_4_train.csv` | 3,583 | ✅ |
-| `fold_4_val.csv` | 896 | ✅ |
+| `fold_0_train.csv` | 1,454 | ✅ |
+| `fold_0_val.csv` | 162 | ✅ |
+| `fold_1_train.csv` | 1,454 | ✅ |
+| `fold_1_val.csv` | 162 | ✅ |
+| `fold_2_train.csv` | 1,454 | ✅ |
+| `fold_2_val.csv` | 162 | ✅ |
+| `fold_3_train.csv` | 1,454 | ✅ |
+| `fold_3_val.csv` | 162 | ✅ |
+| `fold_4_train.csv` | 1,454 | ✅ |
+| `fold_4_val.csv` | 162 | ✅ |
+| `fold_5_train.csv` | 1,455 | ✅ |
+| `fold_5_val.csv` | 161 | ✅ |
+| `fold_6_train.csv` | 1,454 | ✅ |
+| `fold_6_val.csv` | 162 | ✅ |
+| `fold_7_train.csv` | 1,455 | ✅ |
+| `fold_7_val.csv` | 161 | ✅ |
+| `fold_8_train.csv` | 1,455 | ✅ |
+| `fold_8_val.csv` | 161 | ✅ |
+| `fold_9_train.csv` | 1,455 | ✅ |
+| `fold_9_val.csv` | 161 | ✅ |
 
 > **Yorum:** Tüm fold dosyalarının mevcut ve dolu olması, split
 > işleminin başarıyla tamamlandığını gösterir.
@@ -43,6 +53,11 @@
 | Fold 2 | 0 | ✅ |
 | Fold 3 | 0 | ✅ |
 | Fold 4 | 0 | ✅ |
+| Fold 5 | 0 | ✅ |
+| Fold 6 | 0 | ✅ |
+| Fold 7 | 0 | ✅ |
+| Fold 8 | 0 | ✅ |
+| Fold 9 | 0 | ✅ |
 
 > **Yorum:** Tüm fold'larda kesişim 0 ise, hasta bazlı
 > izolasyon sağlanmıştır ve model performans metrikleri
@@ -55,7 +70,7 @@
 > tekrarlanan hastalar ise performans metriklerini bozar.
 > 5-fold CV'de her hasta tam 1 kez val setinde olmalıdır.
 
-- Val'de unique hasta: **4,479** / 4,479 ✅
+- Val'de unique hasta: **1,616** / 1,616 ✅
 - Tekrarlanan hasta (val'ler arası): **0** ✅
 
 > **Yorum:** 5 fold'un val setleri birleştirildiğinde tüm
@@ -70,17 +85,22 @@
 > Dengesiz fold'lar, modelin bazı fold'larda sistematik olarak
 > farklı performans göstermesine neden olabilir.
 
-**Global:** 550 Death / 3929 Survived (oran: 0.1228)
+**Global:** 221 Death / 1395 Survived (oran: 0.1368)
 
 | Fold | Train | Train Death% | Val | Val Death% | Sapma |
 |------|-------|-------------|-----|-----------|-------|
-| 0 | 3,583 | 12.28% | 896 | 12.28% | 0.0000 |
-| 1 | 3,583 | 12.28% | 896 | 12.28% | 0.0000 |
-| 2 | 3,583 | 12.28% | 896 | 12.28% | 0.0000 |
-| 3 | 3,584 | 12.28% | 895 | 12.29% | 0.0001 |
-| 4 | 3,583 | 12.28% | 896 | 12.28% | 0.0000 |
+| 0 | 1,454 | 13.69% | 162 | 13.58% | 0.0010 |
+| 1 | 1,454 | 13.69% | 162 | 13.58% | 0.0010 |
+| 2 | 1,454 | 13.69% | 162 | 13.58% | 0.0010 |
+| 3 | 1,454 | 13.69% | 162 | 13.58% | 0.0010 |
+| 4 | 1,454 | 13.62% | 162 | 14.20% | 0.0052 |
+| 5 | 1,455 | 13.68% | 161 | 13.66% | 0.0001 |
+| 6 | 1,454 | 13.69% | 162 | 13.58% | 0.0010 |
+| 7 | 1,455 | 13.68% | 161 | 13.66% | 0.0001 |
+| 8 | 1,455 | 13.68% | 161 | 13.66% | 0.0001 |
+| 9 | 1,455 | 13.68% | 161 | 13.66% | 0.0001 |
 
-Max sapma: **0.0001** (< 2%) ✅
+Max sapma: **0.0052** (< 2%) ✅
 
 > **Yorum:** Max sapma <%2 ise fold'lar arasında sınıf dağılımı
 > dengeli demektir. Bu, cross-validation sonuçlarının fold
@@ -102,16 +122,21 @@ Max sapma: **0.0001** (< 2%) ✅
 
 | Fold | Survived | Death |
 |------|----------|-------|
-| Val 0 | 786 | 110 |
-| Val 1 | 786 | 110 |
-| Val 2 | 786 | 110 |
-| Val 3 | 785 | 110 |
-| Val 4 | 786 | 110 |
+| Val 0 | 140 | 22 |
+| Val 1 | 140 | 22 |
+| Val 2 | 140 | 22 |
+| Val 3 | 140 | 22 |
+| Val 4 | 139 | 23 |
+| Val 5 | 139 | 22 |
+| Val 6 | 140 | 22 |
+| Val 7 | 139 | 22 |
+| Val 8 | 139 | 22 |
+| Val 9 | 139 | 22 |
 
 | Metrik | Değer |
 |--------|-------|
-| χ² | 0.0001 |
-| df | 4 |
+| χ² | 0.0437 |
+| df | 9 |
 | **p-value** | **1.000000** |
 | Sonuç | ✅ H₀ reddedilemez → dağılımlar homojen |
 
@@ -121,18 +146,23 @@ Max sapma: **0.0001** (< 2%) ✅
 
 ### 5.2 Proportion Z-Test (Her Fold vs Global)
 
-> **H₀:** Fold'un mortalite oranı = global oran (0.1228).
+> **H₀:** Fold'un mortalite oranı = global oran (0.1368).
 > Her fold'un val setindeki mortalite oranı, tek örneklem oran
 > z-testi ile global oranla karşılaştırılır. p > α ise o fold'un
 > oranı global orandan anlamlı şekilde farklı değildir.
 
 | Fold | Val Death% | z-stat | p-value | Sonuç |
 |------|-----------|--------|---------|-------|
-| 0 | 110/896 (12.28%) | -0.0025 | 0.998005 | ✅ |
-| 1 | 110/896 (12.28%) | -0.0025 | 0.998005 | ✅ |
-| 2 | 110/896 (12.28%) | -0.0025 | 0.998005 | ✅ |
-| 3 | 110/895 (12.29%) | +0.0100 | 0.992017 | ✅ |
-| 4 | 110/896 (12.28%) | -0.0025 | 0.998005 | ✅ |
+| 0 | 22/162 (13.58%) | -0.0354 | 0.971781 | ✅ |
+| 1 | 22/162 (13.58%) | -0.0354 | 0.971781 | ✅ |
+| 2 | 22/162 (13.58%) | -0.0354 | 0.971781 | ✅ |
+| 3 | 22/162 (13.58%) | -0.0354 | 0.971781 | ✅ |
+| 4 | 23/162 (14.20%) | +0.1933 | 0.846732 | ✅ |
+| 5 | 22/161 (13.66%) | -0.0041 | 0.996716 | ✅ |
+| 6 | 22/162 (13.58%) | -0.0354 | 0.971781 | ✅ |
+| 7 | 22/161 (13.66%) | -0.0041 | 0.996716 | ✅ |
+| 8 | 22/161 (13.66%) | -0.0041 | 0.996716 | ✅ |
+| 9 | 22/161 (13.66%) | -0.0041 | 0.996716 | ✅ |
 
 ✅ **Tüm fold'lar global oranla istatistiksel olarak uyumlu (p > 0.05)**
 

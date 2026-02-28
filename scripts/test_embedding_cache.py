@@ -41,9 +41,9 @@ def test_write(h5_path: Path) -> dict[str, np.ndarray]:
 
     with EmbeddingCacheWriter(h5_path) as writer:
         for i, pid in enumerate(PATIENT_IDS):
-            # Tabular
+            # Tabular (fold=0 kullanıyoruz)
             tab = rng.standard_normal(TABULAR_DIM).astype(np.float32)
-            writer.save_tabular(pid, tab)
+            writer.save_tabular(pid, tab, fold=0)
             originals[f"tab_p{pid}"] = tab
 
             # Radiological (bazı hastaların birden fazla X-ray'i var)
@@ -116,7 +116,7 @@ def test_helpers(h5_path: Path) -> None:
     """is_cached ve cache_stats helper fonksiyonlarını test eder."""
     # is_cached
     assert is_cached(h5_path, 10030053, "radiological"), "is_cached radiological BAŞARISIZ"
-    assert is_cached(h5_path, 10030053, "tabular"), "is_cached tabular BAŞARISIZ"
+    assert is_cached(h5_path, 10030053, "tabular", fold=0), "is_cached tabular BAŞARISIZ"
     assert not is_cached(h5_path, 99999999, "radiological"), "is_cached false-positive!"
 
     print("   ✅ is_cached helper doğru çalışıyor")
@@ -125,11 +125,12 @@ def test_helpers(h5_path: Path) -> None:
     stats = cache_stats(h5_path)
     assert stats["exists"] is True
     assert stats["num_radiological_embeddings"] == sum(NUM_XRAYS)
-    assert stats["num_tabular_embeddings"] == NUM_PATIENTS
+    assert stats["num_tabular_embeddings_total"] == NUM_PATIENTS
+    assert stats["tabular_per_fold"]["fold_0"] == NUM_PATIENTS
     assert stats["num_unique_patients_radiological"] == NUM_PATIENTS
 
     print(f"   ✅ cache_stats: {stats['num_radiological_embeddings']} rad, "
-          f"{stats['num_tabular_embeddings']} tab embeddings")
+          f"{stats['num_tabular_embeddings_total']} tab embeddings (fold_0={stats['tabular_per_fold']['fold_0']})")
 
 
 def test_overwrite_protection(h5_path: Path) -> None:
@@ -141,7 +142,7 @@ def test_overwrite_protection(h5_path: Path) -> None:
     with EmbeddingCacheWriter(h5_path) as writer:
         # force=False (default) — üzerine yazmaz
         writer.save_radiological(10030053, new_rad, xray_idx=0, force=False)
-        writer.save_tabular(10030053, new_tab, force=False)
+        writer.save_tabular(10030053, new_tab, fold=0, force=False)
 
     # Orijinal değer hâlâ korunmalı (yeni değer yazılmamış)
     import h5py
