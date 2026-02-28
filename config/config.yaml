@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# TIME-Multimodal — Merkezi Konfigürasyon
+# ═══════════════════════════════════════════════════════════════════════════
+# Tüm seed, path, kolon ve model sabitleri burada tanımlıdır.
+# Proje genelinde `from src.config import get_config` ile erişilir.
+
+# ── Reproducibility ─────────────────────────────────────────────────────
+seed: 42
+
+# ── Cross-Validation ────────────────────────────────────────────────────
+cv:
+  n_folds: 5
+
+# ── Paths (proje köküne göre relative) ──────────────────────────────────
+paths:
+  raw_csv: data/raw/csv/patient_01.csv
+  raw_images: data/raw/images
+  tabpfn_features: data/processed/tabpfn_features.csv
+  tabpfn_features_clean: data/processed/tabpfn_features_clean.csv
+  xray_lmdb: data/processed/xray.lmdb
+  splits_dir: data/splits/5fold
+  embeddings_h5: data/embeddings/embeddings.h5
+  embeddings_tabular: data/embeddings/tabular
+  embeddings_radiological: data/embeddings/radiological
+
+# ── Columns ─────────────────────────────────────────────────────────────
+columns:
+  patient_id: patient_id
+  label_source: destin_discharge
+  label_positive: Death
+
+  raw_features:
+    - age
+    - sex
+    - temp_first_emerg
+    - hr_first_emerg
+    - bp_max_first_emerg
+    - bp_min_first_emerg
+    - glu_first_emerg
+    - temp_last_emerg
+    - sat_02_last_emerg
+    - hr_last_emerg
+    - bp_max_last_emerg
+    - bp_min_last_emerg
+    - sat_02_first_emerg
+
+# ── Embeddings ──────────────────────────────────────────────────────────
+embeddings:
+  radiological_dim: 768
+  tabular_dim: 192
+
+# ── Image Transform ─────────────────────────────────────────────────────
+image:
+  size: 224
+  imagenet_mean: [0.485, 0.456, 0.406]
+  imagenet_std: [0.229, 0.224, 0.225]
+
+# ── LMDB ────────────────────────────────────────────────────────────────
+lmdb:
+  map_size_gb: 50

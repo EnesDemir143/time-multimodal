@@ -25,23 +25,27 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-# ── Defaults ─────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from src.config import get_config
 
-LMDB_PATH = PROJECT_ROOT / "data" / "processed" / "xray.lmdb"
-TABULAR_CSV = PROJECT_ROOT / "data" / "processed" / "tabpfn_features_clean.csv"
-SPLITS_DIR = PROJECT_ROOT / "data" / "splits" / "5fold"
+# ── Config ───────────────────────────────────────────────────────────────
+_cfg = get_config()
+
+LMDB_PATH = _cfg.paths.xray_lmdb
+TABULAR_CSV = _cfg.paths.tabpfn_features_clean
+SPLITS_DIR = _cfg.paths.splits_dir
 
 # ImageNet normalization (RadJEPA pretrained)
-IMAGENET_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_STD = (0.229, 0.224, 0.225)
+IMAGENET_MEAN = _cfg.image.imagenet_mean
+IMAGENET_STD = _cfg.image.imagenet_std
 
 # Feature columns (patient_id hariç tüm sütunlar)
 FEATURE_COLUMNS: list[str] | None = None  # Lazy-loaded at runtime
 
 
-def _default_transform(image_size: int = 224) -> transforms.Compose:
+def _default_transform(image_size: int | None = None) -> transforms.Compose:
     """Deterministic inference transform — no augmentation."""
+    if image_size is None:
+        image_size = _cfg.image.size
     return transforms.Compose(
         [
             transforms.Resize((image_size, image_size), antialias=True),

@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold
 
-# ── Paths ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RAW_CSV = PROJECT_ROOT / "data" / "raw" / "csv" / "patient_01.csv"
-CLEAN_CSV = PROJECT_ROOT / "data" / "processed" / "tabpfn_features_clean.csv"
-SPLITS_DIR = PROJECT_ROOT / "data" / "splits" / "5fold"
+from src.config import get_config
 
 # ── Config ───────────────────────────────────────────────────────────────
-N_FOLDS = 5
-SEED = 42
+_cfg = get_config()
+
+RAW_CSV = _cfg.paths.raw_csv
+CLEAN_CSV = _cfg.paths.tabpfn_features_clean
+SPLITS_DIR = _cfg.paths.splits_dir
+N_FOLDS = _cfg.cv.n_folds
+SEED = _cfg.seed
 
 
 def create_labels(raw_path: Path, clean_path: Path) -> pd.DataFrame:

@@ -11,14 +11,16 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-# ── Defaults ─────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from src.config import get_config
 
-DEFAULT_H5_PATH = PROJECT_ROOT / "data" / "embeddings" / "embeddings.h5"
-SPLITS_DIR = PROJECT_ROOT / "data" / "splits" / "5fold"
+# ── Config ───────────────────────────────────────────────────────────────
+_cfg = get_config()
 
-RADIOLOGICAL_DIM = 768
-TABULAR_DIM = 192
+DEFAULT_H5_PATH = _cfg.paths.embeddings_h5
+SPLITS_DIR = _cfg.paths.splits_dir
+
+RADIOLOGICAL_DIM = _cfg.embeddings.radiological_dim
+TABULAR_DIM = _cfg.embeddings.tabular_dim
 
 
 # ══════════════════════════════════════════════════════════════════════════

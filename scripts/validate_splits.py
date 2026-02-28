@@ -6,14 +6,17 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-# ── Paths ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SPLITS_DIR = PROJECT_ROOT / "data" / "splits" / "5fold"
-CLEAN_CSV = PROJECT_ROOT / "data" / "processed" / "tabpfn_features_clean.csv"
-REPORT_DIR = PROJECT_ROOT / "docs"
+from src.config import get_config
+
+# ── Config ───────────────────────────────────────────────────────────────
+_cfg = get_config()
+
+SPLITS_DIR = _cfg.paths.splits_dir
+CLEAN_CSV = _cfg.paths.tabpfn_features_clean
+REPORT_DIR = Path(__file__).resolve().parents[1] / "docs"
 REPORT_PATH = REPORT_DIR / "split_validation_report.md"
 
-N_FOLDS = 5
+N_FOLDS = _cfg.cv.n_folds
 PASS = "✅"
 FAIL = "❌"
 ALPHA = 0.05  # anlamlılık düzeyi

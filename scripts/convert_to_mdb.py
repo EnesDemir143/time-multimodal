@@ -8,18 +8,18 @@ Kullanım:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import lmdb
 from tqdm import tqdm
 
-# ── Paths ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-IMAGES_DIR = PROJECT_ROOT / "data" / "raw" / "images"
-LMDB_PATH = PROJECT_ROOT / "data" / "processed" / "xray.lmdb"
+from src.config import get_config
 
-# LMDB map size — 50 GB (yeterli headroom)
-MAP_SIZE = 50 * 1024 * 1024 * 1024  # 50 GiB
+# ── Config ───────────────────────────────────────────────────────────────
+_cfg = get_config()
+
+IMAGES_DIR = _cfg.paths.raw_images
+LMDB_PATH = _cfg.paths.xray_lmdb
+MAP_SIZE = _cfg.lmdb.map_size_bytes
 
 
 def collect_image_paths(root: Path) -> list[tuple[str, Path]]:

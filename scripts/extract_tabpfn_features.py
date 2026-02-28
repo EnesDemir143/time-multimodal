@@ -6,35 +6,19 @@ Kullanım:
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 
-# ── Paths ────────────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RAW_CSV = PROJECT_ROOT / "data" / "raw" / "csv" / "patient_01.csv"
-OUT_CSV = PROJECT_ROOT / "data" / "processed" / "tabpfn_features.csv"
+from src.config import get_config
 
-# ── Kullanılacak ham kolonlar ────────────────────────────────────────────
-RAW_COLS = [
-    "patient_id",
-    "age",
-    "sex",
-    # First vitals
-    "temp_first_emerg",
-    "hr_first_emerg",
-    "bp_max_first_emerg",
-    "bp_min_first_emerg",
-    "sat_02_first_emerg",
-    "glu_first_emerg",
-    # Last vitals
-    "temp_last_emerg",
-    "sat_02_last_emerg",
-    "hr_last_emerg",
-    "bp_max_last_emerg",
-    "bp_min_last_emerg",
-]
+# ── Config ───────────────────────────────────────────────────────────────
+_cfg = get_config()
+
+RAW_CSV = _cfg.paths.raw_csv
+OUT_CSV = _cfg.paths.tabpfn_features
+
+# ── Kullanılacak ham kolonlar (config'den) ───────────────────────────────
+RAW_COLS = [_cfg.columns.patient_id] + list(_cfg.columns.raw_features)
 
 
 def load_and_select(path: Path) -> pd.DataFrame:

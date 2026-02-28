@@ -4,23 +4,28 @@ import random
 import numpy as np
 import torch
 
+from src.config import get_config
 
-def set_seeds(seed: int = 42) -> torch.Generator:
+
+def set_seeds(seed: int | None = None) -> torch.Generator:
     """Set all random seeds for deterministic reproducibility and return a torch Generator.
 
+    Seed varsayılan olarak ``config/config.yaml``'dan okunur.
+
     Seeds set:
-        - Python stdlib `random`
+        - Python stdlib ``random``
         - NumPy
         - PyTorch (CPU + MPS)
         - Environment variables for single-thread determinism
 
     Args:
-        seed: The seed value to use everywhere. Defaults to 42.
+        seed: Seed değeri. ``None`` ise config'den okunur.
 
     Returns:
-        torch.Generator: A manually seeded generator (on MPS if available, else CPU).
-                         Pass this to DataLoader, random ops, etc.
+        torch.Generator: MPS (varsa) veya CPU üzerinde seeded generator.
     """
+    if seed is None:
+        seed = get_config().seed
     # ── Python & NumPy ──────────────────────────────────────────────
     random.seed(seed)
     np.random.seed(seed)
