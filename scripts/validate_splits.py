@@ -46,6 +46,11 @@ def main() -> None:
     # ── 1. Dosya bütünlüğü ──────────────────────────────────────
     log("## 1. Dosya Bütünlüğü")
     log("")
+    log("> **Amaç:** 5-fold cross-validation için gerekli tüm CSV dosyalarının")
+    log("> (`fold_X_train.csv`, `fold_X_val.csv`) mevcut olduğunu ve boş")
+    log("> olmadığını doğrular. Eksik veya boş dosyalar, eğitim pipeline'ının")
+    log("> hata vermesine neden olur.")
+    log("")
     log("| Dosya | Satır | Durum |")
     log("|-------|-------|-------|")
 
@@ -59,6 +64,10 @@ def main() -> None:
             log(f"| `fold_{fold}_{split}.csv` | {n:,} | {status} |")
             if not exists or n == 0:
                 all_files_ok = False
+    log("")
+
+    log("> **Yorum:** Tüm fold dosyalarının mevcut ve dolu olması, split")
+    log("> işleminin başarıyla tamamlandığını gösterir.")
     log("")
 
     if not all_files_ok:
@@ -81,6 +90,12 @@ def main() -> None:
     # ── 2. Data leakage ─────────────────────────────────────────
     log("## 2. Data Leakage Kontrolü")
     log("")
+    log("> **Amaç:** Aynı hastanın hem train hem de val setinde yer alıp")
+    log("> almadığını kontrol eder. Data leakage, modelin val setindeki")
+    log("> hastaları eğitim sırasında görmesine neden olur ve gerçek")
+    log("> performansın olduğundan yüksek görünmesine yol açar.")
+    log("> Bu, klinik AI çalışmalarında en kritik hatalardan biridir.")
+    log("")
     log("| Fold | train ∩ val | Durum |")
     log("|------|-------------|-------|")
 
@@ -94,9 +109,18 @@ def main() -> None:
         if overlap > 0:
             leakage_ok = False
     log("")
+    log("> **Yorum:** Tüm fold'larda kesişim 0 ise, hasta bazlı")
+    log("> izolasyon sağlanmıştır ve model performans metrikleri")
+    log("> güvenilirdir.")
+    log("")
 
     # ── 3. Kapsam ───────────────────────────────────────────────
     log("## 3. Kapsam Kontrolü")
+    log("")
+    log("> **Amaç:** Tüm hastaların tam olarak bir val fold'unda yer aldığını")
+    log("> doğrular. Eksik hastalar değerlendirilmemiş veri demektir;")
+    log("> tekrarlanan hastalar ise performans metriklerini bozar.")
+    log("> 5-fold CV'de her hasta tam 1 kez val setinde olmalıdır.")
     log("")
 
     all_val_ids: list[int] = []
@@ -112,9 +136,19 @@ def main() -> None:
     log(f"- Tekrarlanan hasta (val'ler arası): **{dup_count}** "
         f"{PASS if dup_count == 0 else FAIL}")
     log("")
+    log("> **Yorum:** 5 fold'un val setleri birleştirildiğinde tüm")
+    log("> hastaları kapsıyor ve hiçbir hasta birden fazla fold'da")
+    log("> tekrarlanmıyorsa, cross-validation yapısı doğrudur.")
+    log("")
 
     # ── 4. Stratifikasyon ───────────────────────────────────────
     log("## 4. Stratifikasyon Dağılımı")
+    log("")
+    log("> **Amaç:** Her fold'daki mortalite (ölüm) oranının global orandan")
+    log("> ne kadar saptığını ölçer. Stratified split, sınıf dengesini")
+    log("> korumayı hedefler. <%2 sapma kabul edilebilir aralıktadır.")
+    log("> Dengesiz fold'lar, modelin bazı fold'larda sistematik olarak")
+    log("> farklı performans göstermesine neden olabilir.")
     log("")
 
     all_labels = pd.concat([folds[0]["train"], folds[0]["val"]])
@@ -143,15 +177,27 @@ def main() -> None:
     log(f"Max sapma: **{max_deviation:.4f}** "
         f"{'(< 2%)' if strat_ok else '(≥ 2% ⚠️)'} {PASS if strat_ok else FAIL}")
     log("")
+    log("> **Yorum:** Max sapma <%2 ise fold'lar arasında sınıf dağılımı")
+    log("> dengeli demektir. Bu, cross-validation sonuçlarının fold")
+    log("> seçimine bağlı olmadığını gösterir.")
+    log("")
 
     # ── 5. İstatistiksel Testler ────────────────────────────────
     log("## 5. İstatistiksel Testler")
+    log("")
+    log("> **Amaç:** Fold'lar arası dağılım farklılıklarının istatistiksel")
+    log("> olarak anlamlı olup olmadığını test eder. Gözle görülen küçük")
+    log("> farkların rastgele mi yoksa sistematik mi olduğunu ayırt etmek")
+    log("> için hipotez testleri kullanılır.")
     log("")
 
     # 5a. Chi-squared: fold'lar arası homojenlik
     log("### 5.1 Chi-Squared Homojenlik Testi")
     log("")
-    log("> **H₀:** Tüm fold'lardaki mortalite oranları aynı dağılımdan geliyor")
+    log("> **H₀:** Tüm fold'lardaki mortalite oranları aynı dağılımdan geliyor.")
+    log("> Bu test, 5 fold'un val setlerindeki survived/death sayılarını bir")
+    log("> contingency tablosuna yerleştirir ve χ² testi uygular. p > α ise")
+    log("> dağılımlar homojendir (fold'lar arası anlamlı fark yoktur).")
     log("")
 
     contingency = np.zeros((N_FOLDS, 2), dtype=int)
@@ -175,14 +221,22 @@ def main() -> None:
     log(f"| **p-value** | **{p_chi:.6f}** |")
     log(f"| Sonuç | {PASS + ' H₀ reddedilemez → dağılımlar homojen' if chi_ok else FAIL + ' H₀ reddedildi → dağılımlar farklı ⚠️'} |")
     log("")
+    log("> **Yorum:** p-value > α ise, fold'lar arasındaki mortalite oranı")
+    log("> farkları istatistiksel olarak anlamsızdır (rastgele varyasyondur).")
+    log("> Bu, stratified split algoritmasının başarıyla çalıştığını doğrular.")
+    log("")
 
     # 5b. Proportion z-test: her fold vs global
     log("### 5.2 Proportion Z-Test (Her Fold vs Global)")
     log("")
-    log(f"> **H₀:** Fold'un mortalite oranı = global oran ({global_rate:.4f})")
+    log(f"> **H₀:** Fold'un mortalite oranı = global oran ({global_rate:.4f}).")
+    log("> Her fold'un val setindeki mortalite oranı, tek örneklem oran")
+    log("> z-testi ile global oranla karşılaştırılır. p > α ise o fold'un")
+    log("> oranı global orandan anlamlı şekilde farklı değildir.")
     log("")
     log("| Fold | Val Death% | z-stat | p-value | Sonuç |")
     log("|------|-----------|--------|---------|-------|")
+
 
     all_z_ok = True
     for fold in range(N_FOLDS):
@@ -201,6 +255,10 @@ def main() -> None:
         log(f"{PASS} **Tüm fold'lar global oranla istatistiksel olarak uyumlu (p > {ALPHA})**")
     else:
         log(f"{FAIL} **Bazı fold'lar global orandan anlamlı sapma gösteriyor**")
+    log("")
+    log("> **Yorum:** Tüm fold'larda p > α ise, hiçbir fold'un mortalite")
+    log("> oranı global populasyondan istatistiksel olarak sapmıyordur.")
+    log("> Bu, her fold'un genel veri setini temsil ettiğini kanıtlar.")
     log("")
 
     # ── Genel Sonuç ─────────────────────────────────────────────

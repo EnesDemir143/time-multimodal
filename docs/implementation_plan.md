@@ -1,6 +1,6 @@
 # 📋 Implementation Plan — Multimodal Mortalite Tahmini Pipeline'ı
 
-> **Durum:** 🟢 Sprint 0 + 0.5 tamamlandı — Sprint 1'e geçiliyor  
+> **Durum:** 🟢 Sprint 0 + 0.5 + Sprint 1 (1.1–1.6) tamamlandı — Sprint 1.7 (Embedding Cache) devam ediyor  
 > **Son güncelleme:** 2026-02-28
 
 ---
@@ -39,7 +39,7 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 
 ---
 
-### Sprint 1 — Veri Altyapısı *(~2-3 gün)*
+### Sprint 1 — Veri Altyapısı *(~2-3 gün)* ✅ (1.1–1.6 tamamlandı)
 
 | # | Görev | Çıktı | Durum |
 |---|-------|-------|-------|
@@ -48,7 +48,7 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 | 1.3 | Patient-level StratifiedGroupKFold 5-fold split (mortalite label) | `scripts/create_splits_5fold.py` → `data/splits/5fold/fold_{0-4}_{train,val}.csv` | ✅ |
 | 1.4 | Stratification doğrulama scripti (χ² + z-test, md rapor) | `scripts/validate_splits.py` → `docs/split_validation_report.md` | ✅ |
 | 1.5 | ~~LMDB cache builder~~ | ~~`src/data/lmdb_builder.py`~~ | ✅ Sprint 0.5'te tamamlandı |
-| 1.6 | LMDB bitwise determinizm testi | `tests/test_lmdb_determinism.py` | ⬜ |
+| 1.6 | LMDB bitwise determinizm testi | `scripts/test_lmdb_determinism.py` → `docs/lmdb_determinism_report.md` | ✅ |
 | 1.7 | **Embedding Cache Sistemi** — RadJEPA (768-dim) ve TabPFN (192-dim) embedding'lerini bir kez çıkar, `.npy` olarak cache'le. Eğitimde her epoch tekrar çıkarım yapılmaz | `src/data/embedding_cache.py` → `data/embeddings/` | ⬜ |
 
 > [!IMPORTANT]
@@ -125,35 +125,44 @@ CDSL göğüs röntgeni + tabular verisinden **binary mortalite tahmini (Death v
 
 ---
 
-## Proje Dizin Yapısı (Önerilen)
+## Proje Dizin Yapısı (Güncel)
 
 ```
 time-multimodal/
-├── config/
-│   └── seed.yaml
 ├── notebooks/                 # EDA ve analiz notebookları
-│   └── 01_data_exploration.ipynb
+│   ├── 01_data_exploration.ipynb   # ✅
+│   └── 02_tabpfn_nan_check.ipynb   # ✅
 ├── data/
-│   ├── raw/                    # Orijinal veri (dokunma)
-│   ├── splits/                 # Fold dosyaları
-│   ├── lmdb/                   # Cached görüntüler
-│   └── embeddings/             # Frozen embedding'ler
+│   ├── raw/                    # Orijinal CSV + X-ray (dokunma)
+│   │   └── images/             # 4,608 JPEG
+│   ├── processed/
+│   │   ├── tabpfn_features.csv       # ✅
+│   │   ├── tabpfn_features_clean.csv # ✅ (4,479 × 17)
+│   │   └── xray.lmdb/               # ✅ (~6.5 GB)
+│   ├── splits/
+│   │   └── 5fold/              # ✅ fold_{0-4}_{train,val}.csv
+│   └── embeddings/             # ⬜ Sprint 2'de doldurulacak
 │       ├── tabular/
 │       └── radiological/
 ├── docs/
-│   ├── pipeline.md             # ✅ Bu dosya
-│   └── implementation_plan.md  # ✅ Bu dosya
+│   ├── pipeline.md                   # ✅
+│   ├── implementation_plan.md        # ✅ Bu dosya
+│   ├── split_validation_report.md    # ✅
+│   └── lmdb_determinism_report.md    # ✅
 ├── src/
+│   ├── __init__.py
+│   ├── utils/
+│   │   ├── __init__.py          # re-exports set_seeds
+│   │   └── set_seeds.py         # ✅ set_seeds()
 │   ├── data/
-│   │   ├── lmdb_builder.py
-│   │   └── dataset.py
+│   │   ├── embedding_cache.py  # ⬜ Sprint 1.7
+│   │   └── dataset.py          # ⬜ Sprint 2+
 │   ├── models/
-│   │   ├── projection.py
+│   │   ├── projection.py       # ⬜ Sprint 3
 │   │   ├── modality_dropout.py
 │   │   └── classifier.py
 │   ├── training/
-│   │   ├── stage1.py
-│   │   ├── stage2.py
+│   │   ├── train.py
 │   │   ├── cross_val.py
 │   │   └── early_stopping.py
 │   ├── augmentation/
@@ -162,22 +171,18 @@ time-multimodal/
 │   ├── calibration/
 │   │   ├── temperature.py
 │   │   └── reject.py
-│   ├── evaluation/
-│   │   └── metrics.py
-│   └── utils/
-│       ├── seed.py
-│       └── class_weights.py
+│   └── evaluation/
+│       └── metrics.py
 ├── scripts/
 │   ├── get_xray.py              # ✅ Raw veri kopyalama
 │   ├── extract_tabpfn_features.py # ✅ Feature extraction
 │   ├── convert_to_mdb.py        # ✅ JPEG → LMDB
-│   ├── validate_splits.py
-│   ├── validate_embeddings.py
-│   └── count_params.py
-├── tests/
-│   └── test_lmdb_determinism.py
+│   ├── create_splits_5fold.py   # ✅ 5-fold split oluşturma
+│   ├── validate_splits.py       # ✅ Split doğrulama
+│   ├── test_lmdb_determinism.py # ✅ LMDB determinizm testi
+│   ├── validate_embeddings.py   # ⬜ Sprint 2
+│   └── count_params.py          # ⬜ Sprint 3
 ├── reports/
-│   ├── eda_report.md
 │   ├── calibration/
 │   └── ablation/
 ├── main.py
@@ -199,7 +204,9 @@ time-multimodal/
 
 ---
 
-## Sonraki Adım
+## Sonraki Adımlar
 
 > [!IMPORTANT]
-> **Sprint 0 + 0.5 tamamlandı. Binary Mortalite (Death vs Survived) kararı verildi.** Sırada Sprint 1 (split, determinizm, embedding cache) ve Sprint 2 (embedding çıkarımı) var.
+> **Sprint 0, 0.5 ve Sprint 1 (1.1–1.6) tamamlandı.** Split validation ve LMDB determinism raporları `docs/` altında mevcut.
+>
+> **Sıradaki görev:** Sprint 1.7 — Embedding Cache Sistemi (`src/data/embedding_cache.py`). Ardından Sprint 2 — Frozen Embedding Çıkarımı (TabPFN v2 + RadJEPA).

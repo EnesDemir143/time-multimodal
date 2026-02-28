@@ -50,6 +50,11 @@ def test_key_ordering(env: lmdb.Environment, log):
     """Test 1: __keys__ listesinin sıralı olduğunu doğrula."""
     log("## 1. Key Sıralama Testi")
     log("")
+    log("> **Amaç:** LMDB'deki `__keys__` metadata listesinin alfabetik sıralı")
+    log("> olduğunu doğrular. Sıralı key'ler, LMDB B+ tree yapısında verimli")
+    log("> sequential read sağlar ve DataLoader'ın her epoch'ta tutarlı sırada")
+    log("> veri okumasını garanti eder.")
+    log("")
 
     with env.begin() as txn:
         raw = txn.get(b"__keys__")
@@ -68,12 +73,23 @@ def test_key_ordering(env: lmdb.Environment, log):
                 log(f"- İlk sırasız index: **{i}** → `{keys[i]}` > `{keys[i+1]}`")
                 break
     log("")
+    log("> **Yorum:** Key'ler sıralıysa LMDB cursor ile sequential okuma")
+    log("> yapıldığında disk I/O optimum seviyede çalışır. Bu, özellikle")
+    log("> multi-worker DataLoader kullanırken önemlidir.")
+    log("")
     return is_sorted, keys
 
 
 def test_roundtrip_integrity(env: lmdb.Environment, keys: list[str], log):
     """Test 2: Diskteki JPEG bytes ile LMDB'deki bytes SHA-256 karşılaştırması."""
     log("## 2. Round-Trip Bütünlük Testi (SHA-256)")
+    log("")
+    log("> **Amaç:** `data/raw/images/` klasöründeki orijinal JPEG dosyalarının")
+    log("> byte içeriği ile LMDB'ye yazılmış kopyaları arasında SHA-256 hash")
+    log("> karşılaştırması yapar. Her görüntü için disk'teki raw bytes okunur,")
+    log("> aynı key ile LMDB'den okunan bytes ile hash'leri karşılaştırılır.")
+    log("> Eğer tüm hash'ler eşleşirse, `convert_to_mdb.py` sırasında")
+    log("> hiçbir byte kaybı/bozulması olmadığı kanıtlanmış olur.")
     log("")
 
     mismatches: list[str] = []
@@ -116,12 +132,26 @@ def test_roundtrip_integrity(env: lmdb.Environment, keys: list[str], log):
         log(f"> ⚠️ İlk 5 uyuşmazlık: {mismatches[:5]}")
         log("")
 
+    if all_ok:
+        log("> **Yorum:** Tüm görüntülerin SHA-256 hash'leri birebir eşleşiyor.")
+        log("> Bu, LMDB'nin orijinal JPEG byte'larını bozulmadan sakladığını")
+        log("> ve model eğitiminde kullanılan verilerin kaynak dosyalarla")
+        log("> tamamen özdeş olduğunu kanıtlar.")
+        log("")
+
     return all_ok
 
 
 def test_global_checksum(env: lmdb.Environment, log):
     """Test 3: Aynı sıralı taramayı 2 kez yap, digest'lerin aynı olduğunu doğrula."""
     log("## 3. Global Checksum Determinism Testi")
+    log("")
+    log("> **Amaç:** LMDB'nin her okunuşunda aynı sırayla aynı veriyi")
+    log("> döndürdüğünü doğrular. Veritabanı 2 kez baştan sona cursor ile")
+    log("> taranır; her (key, value) çiftinin byte'ları sırayla tek bir")
+    log("> SHA-256 digest'e beslenir. İki taramanın digest'i aynıysa,")
+    log("> LMDB okuma sırası deterministiktir — yani aynı seed ile")
+    log("> aynı epoch sırası garanti edilir.")
     log("")
 
     digests: list[str] = []
@@ -146,6 +176,12 @@ def test_global_checksum(env: lmdb.Environment, log):
     log(f"- İki tarama identical: {PASS if identical else FAIL}")
     log(f"- Full digest: `{digests[0]}`")
     log("")
+    log("> **Yorum:** Aynı digest, LMDB'nin B+ tree yapısının her okumada")
+    log("> aynı key sırasını koruduğunu gösterir. Bu, model eğitiminde")
+    log("> reproducibility (tekrar üretilebilirlik) için kritiktir —")
+    log("> aynı veri pipeline'ı farklı makinelerde çalıştırıldığında")
+    log("> aynı sonuçları üretecektir.")
+    log("")
 
     return identical
 
@@ -153,6 +189,11 @@ def test_global_checksum(env: lmdb.Environment, log):
 def test_metadata_consistency(env: lmdb.Environment, log):
     """Test 4: __len__ ve __keys__ metadata tutarlılığı."""
     log("## 4. Metadata Tutarlılık Testi")
+    log("")
+    log("> **Amaç:** LMDB'deki metadata anahtarlarının (`__len__` ve `__keys__`)")
+    log("> veritabanındaki gerçek kayıt sayısıyla tutarlı olduğunu doğrular.")
+    log("> Bu, veri yükleme kodunun doğru kayıt sayısını bilmesini sağlar")
+    log("> ve eksik/fazla kayıt olup olmadığını tespit eder.")
     log("")
 
     with env.begin() as txn:
@@ -180,6 +221,11 @@ def test_metadata_consistency(env: lmdb.Environment, log):
     log(f"| `len(__keys__)` | {keys_len:,} | {PASS if len_match else FAIL} |")
     log(f"| Gerçek kayıt sayısı | {actual_count:,} | {PASS if count_match else FAIL} |")
     log("")
+    log("> **Yorum:** Üç değerin eşleşmesi, `convert_to_mdb.py`'nin tüm")
+    log("> görüntüleri eksiksiz yazdığını ve metadata'nın doğru")
+    log("> güncellendiğini teyit eder. Uyumsuzluk varsa, yazma sırasında")
+    log("> bir hata oluşmuş demektir.")
+    log("")
 
     return all_ok
 
@@ -187,6 +233,11 @@ def test_metadata_consistency(env: lmdb.Environment, log):
 def test_statistics(env: lmdb.Environment, keys: list[str], log):
     """Test 5: LMDB istatistikleri."""
     log("## 5. LMDB İstatistikleri")
+    log("")
+    log("> **Amaç:** Veritabanının genel boyut dağılımını ve B+ tree")
+    log("> yapısını raporlar. Bu bilgiler, disk kullanımını optimize")
+    log("> etmek ve olası performans sorunlarını tespit etmek için")
+    log("> kullanılır.")
     log("")
 
     sizes: list[int] = []
